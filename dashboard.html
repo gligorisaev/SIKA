@@ -226,9 +226,9 @@
 
         <div class="controls">
             <label for="fileInput">Load Data:</label>
-            <input type="file" id="fileInput" accept=".json,.csv">
+            <input type="file" id="fileInput" accept=".json,.csv,.dbf,.DBF">
             <button onclick="loadData()">Refresh</button>
-            <span style="color: #666; font-size: 0.9em;">Supports CSV and JSON files - All records loaded</span>
+            <span style="color: #666; font-size: 0.9em;">Supports DBF, CSV and JSON files - All records loaded</span>
         </div>
 
         <div id="loadingMessage" class="loading" style="display: none;">
@@ -363,17 +363,24 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
-                        if (file.name.endsWith('.json')) {
+                        if (file.name.toLowerCase().endsWith('.json')) {
                             const data = JSON.parse(e.target.result);
                             processData(data);
-                        } else if (file.name.endsWith('.csv')) {
+                        } else if (file.name.toLowerCase().endsWith('.csv')) {
                             processCSVData(e.target.result);
+                        } else if (file.name.toLowerCase().endsWith('.dbf')) {
+                            processDBFData(new Uint8Array(e.target.result));
                         }
                     } catch (error) {
                         showError('Error parsing file: ' + error.message);
                     }
                 };
-                reader.readAsText(file);
+                
+                if (file.name.toLowerCase().endsWith('.dbf')) {
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    reader.readAsText(file);
+                }
             }
         });
 
@@ -445,7 +452,98 @@
             processData(currentData);
         }
 
-        function loadData() {
+        function processDBFData(buffer) {
+            try {
+                // Read DBF header
+                const view = new DataView(buffer.buffer);
+                const numRecords = view.getUint32(4, true);
+                const headerLength = view.getUint16(8, true);
+                const recordLength = view.getUint16(10, true);
+                
+                // Read field definitions
+                const fields = [];
+                let pos = 32;
+                
+                while (buffer[pos] !== 0x0D) {
+                    const fieldName = String.fromCharCode.apply(null, 
+                        buffer.slice(pos, pos + 11).filter(b => b !== 0));
+                    const fieldType = String.fromCharCode(buffer[pos + 11]);
+                    const fieldLength = buffer[pos + 16];
+                    const fieldDecimal = buffer[pos + 17];
+                    
+                    fields.push({
+                        name: fieldName,
+                        type: fieldType,
+                        length: fieldLength,
+                        decimal: fieldDecimal
+                    });
+                    
+                    pos += 32;
+                }
+                
+                // Read records
+                const records = [];
+                pos = headerLength;
+                
+                for (let i = 0; i < numRecords; i++) {
+                    if (buffer[pos] !== 0x2A) { // Not deleted
+                        const record = {};
+                        let fieldPos = pos + 1;
+                        
+                        fields.forEach(field => {
+                            const fieldData = buffer.slice(fieldPos, fieldPos + field.length);
+                            fieldPos += field.length;
+                            
+                            try {
+                                // Decode using cp1252/windows-1252 for Cyrillic
+                                const decoder = new TextDecoder('windows-1252');
+                                let value = decoder.decode(fieldData).trim();
+                                
+                                if (field.type === 'N') { // Numeric
+                                    if (value) {
+                                        value = value.replace(',', '.');
+                                        value = field.decimal > 0 ? parseFloat(value) : parseInt(value);
+                                    } else {
+                                        value = null;
+                                    }
+                                } else if (field.type === 'D') { // Date
+                                    if (value && value.length === 8) {
+                                        const year = value.substring(0, 4);
+                                        const month = value.substring(4, 6);
+                                        const day = value.substring(6, 8);
+                                        value = `${day}.${month}.${year}`;
+                                    } else {
+                                        value = null;
+                                    }
+                                } else if (field.type === 'L') { // Logical
+                                    value = ['T', 't', 'Y', 'y'].includes(value);
+                                }
+                                
+                                record[field.name] = value;
+                            } catch (e) {
+                                record[field.name] = null;
+                            }
+                        });
+                        
+                        records.push(record);
+                    }
+                    pos += recordLength;
+                }
+                
+                currentData = {
+                    fields: fields,
+                    records: records,
+                    total_records: records.length
+                };
+                
+                processData(currentData);
+                
+            } catch (error) {
+                showError('Error reading DBF file: ' + error.message);
+            }
+        }
+
+        async function loadDefaultData() {
             loadDefaultData();
         }
 
