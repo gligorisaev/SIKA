@@ -1167,7 +1167,8 @@
                 total: customerRecords.length,
                 totalRevenue: 0,
                 avgRevenue: 0,
-                lastInvoiceDate: null
+                lastInvoiceDate: null,
+                lastInvoiceDateComparable: null
             };
 
             customerRecords.forEach(record => {
@@ -1185,7 +1186,8 @@
                         }
                     }
                     
-                    if (!stats.lastInvoiceDate || comparableDate > stats.lastInvoiceDate) {
+                    if (!stats.lastInvoiceDateComparable || comparableDate > stats.lastInvoiceDateComparable) {
+                        stats.lastInvoiceDateComparable = comparableDate;
                         stats.lastInvoiceDate = date; // Store original format for display
                     }
                 }
