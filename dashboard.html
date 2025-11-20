@@ -1175,8 +1175,19 @@
                 stats.totalRevenue += amount;
                 
                 const date = record.DATUM || record.DATE;
-                if (date && (!stats.lastInvoiceDate || date > stats.lastInvoiceDate)) {
-                    stats.lastInvoiceDate = date;
+                if (date) {
+                    // Convert DD.MM.YYYY to comparable format YYYY-MM-DD
+                    let comparableDate = date;
+                    if (date.includes('.')) {
+                        const parts = date.split('.');
+                        if (parts.length === 3) {
+                            comparableDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        }
+                    }
+                    
+                    if (!stats.lastInvoiceDate || comparableDate > stats.lastInvoiceDate) {
+                        stats.lastInvoiceDate = date; // Store original format for display
+                    }
                 }
             });
 
