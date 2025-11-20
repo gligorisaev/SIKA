@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIKA ERP Dashboard - Invoice Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            color: #333;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .stat-card.primary .value { color: #667eea; }
+        .stat-card.success .value { color: #48bb78; }
+        .stat-card.warning .value { color: #ed8936; }
+        .stat-card.info .value { color: #4299e1; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-full-width {
+            grid-column: 1 / -1;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .chart-card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .table-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow-x: auto;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .controls label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .controls input, .controls select {
+            padding: 10px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .controls input:focus, .controls select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .controls button {
+            padding: 10px 25px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+
+        .controls button:hover {
+            background: #5568d3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table th {
+            background: #f7fafc;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e2e8f0;
+            position: sticky;
+            top: 0;
+        }
+
+        table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #666;
+        }
+
+        table tr:hover {
+            background: #f7fafc;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: white;
+            font-size: 1.5em;
+        }
+
+        .error {
+            background: #feb2b2;
+            color: #742a2a;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 SIKA ERP Dashboard</h1>
+            <p>Invoice Analytics & Business Intelligence</p>
+        </div>
+
+        <div class="controls">
+            <label for="fileInput">Load Data:</label>
+            <input type="file" id="fileInput" accept=".json,.csv">
+            <button onclick="loadData()">Refresh</button>
+            <span style="color: #666; font-size: 0.9em;">Supports CSV and JSON files - All records loaded</span>
+        </div>
+
+        <div id="loadingMessage" class="loading" style="display: none;">
+            Loading data...
+        </div>
+
+        <div id="errorMessage" class="error" style="display: none;"></div>
+
+        <div id="dashboard" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <h3>Total Invoices</h3>
+                    <div class="value" id="totalInvoices">0</div>
+                    <div class="label">Documents</div>
+                </div>
+                <div class="stat-card success">
+                    <h3>Total Value</h3>
+                    <div class="value" id="totalValue">0</div>
+                    <div class="label">Revenue</div>
+                </div>
+                <div class="stat-card warning">
+                    <h3>Avg Invoice</h3>
+                    <div class="value" id="avgInvoice">0</div>
+                    <div class="label">Per Document</div>
+                </div>
+                <div class="stat-card info">
+                    <h3>Customers</h3>
+                    <div class="value" id="totalCustomers">0</div>
+                    <div class="label">Unique</div>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card chart-full-width">
+                    <h2>📈 Invoice Trend</h2>
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2>🥧 Invoice Types Distribution</h2>
+                    <canvas id="typeChart"></canvas>
+                    <div id="typeDescription" style="margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 8px; font-size: 0.9em;"></div>
+                </div>
+                <div class="chart-card">
+                    <h2>👥 Top 10 Customers</h2>
+                    <canvas id="customerChart"></canvas>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card chart-full-width">
+                    <h2>📊 Monthly Revenue</h2>
+                    <canvas id="revenueChart"></canvas>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <h2>📋 Invoices by Month</h2>
+                <div style="margin-bottom: 20px;">
+                    <label for="monthFilter" style="font-weight: 600; margin-right: 10px;">Select Month:</label>
+                    <select id="monthFilter" style="padding: 10px 15px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1em;">
+                        <option value="all">All Months</option>
+                    </select>
+                </div>
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table id="invoiceTable">
+                        <thead>
+                            <tr id="tableHeader"></tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+        let charts = {};
+
+        // Field translations (Macedonian to English)
+        const fieldTranslations = {
+            'DATE': 'Date',
+            'TIME': 'Time',
+            'ZAT': 'Account',
+            'OZNAKA': 'Code',
+            'TIP_DOK': 'Doc Type',
+            'BR_DOK': 'Doc Number',
+            'POBROJ': 'Counter',
+            'MAG': 'Warehouse',
+            'IMEMAG': 'Warehouse Name',
+            'KOMINT': 'Customer ID',
+            'IMEKOM': 'Customer Name',
+            'DATUM': 'Date',
+            'VALUTA': 'Currency',
+            'PLATENO': 'Paid',
+            'AZUR': 'Updated',
+            'NALOG': 'Order',
+            'DOLGUVA': 'Debt',
+            'POBARUVA': 'Credit',
+            'FAKIZNOS': 'Invoice Amount',
+            'TRANSPORT': 'Transport',
+            'CARINA': 'Customs',
+            'UTOVAR': 'Loading',
+            'TROSOCI': 'Costs',
+            'NACINISPOR': 'Delivery Method',
+            'TOVARLIST': 'Waybill',
+            'VOZILO': 'Vehicle',
+            'PRIMIL': 'Received By',
+            'PORIZJAVA': 'Declaration',
+            'MANIPUL': 'Handling',
+            'SIFCAR': 'Customs Code',
+            'IMECAR': 'Customs Name',
+            'SIFTRANS': 'Transport Code',
+            'IMETRANS': 'Transport Name',
+            'SIFSPED': 'Agent Code',
+            'IMESPED': 'Agent Name',
+            'DDV19': 'VAT 19%',
+            'DDV5': 'VAT 5%',
+            'DOK1': 'Document 1',
+            'DOK2': 'Document 2',
+            'DOK3': 'Document 3',
+            'DOK4': 'Document 4'
+        };
+
+        // Load data from file
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        if (file.name.endsWith('.json')) {
+                            const data = JSON.parse(e.target.result);
+                            processData(data);
+                        } else if (file.name.endsWith('.csv')) {
+                            processCSVData(e.target.result);
+                        }
+                    } catch (error) {
+                        showError('Error parsing file: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Try to load default data
+        window.addEventListener('load', function() {
+            loadDefaultData();
+        });
+
+        async function loadDefaultData() {
+            try {
+                document.getElementById('loadingMessage').style.display = 'block';
+                
+                // Try CSV first
+                let response = await fetch('NASLOV.csv');
+                if (response.ok) {
+                    const csvText = await response.text();
+                    processCSVData(csvText);
+                    return;
+                }
+                
+                // Try JSON
+                response = await fetch('naslov.json');
+                if (response.ok) {
+                    const data = await response.json();
+                    processData(data);
+                    return;
+                }
+                
+                showError('Please load a CSV or JSON file using the file selector above.');
+            } catch (error) {
+                showError('No data loaded. Please select a file (CSV or JSON).');
+            } finally {
+                document.getElementById('loadingMessage').style.display = 'none';
+            }
+        }
+
+        function processCSVData(csvText) {
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(';');
+            
+            const records = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(';');
+                const record = {};
+                headers.forEach((header, index) => {
+                    let value = values[index] || '';
+                    
+                    // Convert numeric values
+                    if (value.includes(',')) {
+                        const numValue = parseFloat(value.replace(',', '.'));
+                        if (!isNaN(numValue)) {
+                            value = numValue;
+                        }
+                    }
+                    
+                    record[header] = value;
+                });
+                records.push(record);
+            }
+            
+            const fields = headers.map(h => ({ name: h, type: 'C' }));
+            
+            currentData = {
+                fields: fields,
+                records: records,
+                total_records: records.length
+            };
+            
+            processData(currentData);
+        }
+
+        function loadData() {
+            loadDefaultData();
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 10000);
+        }
+
+        function processData(data) {
+            currentData = data;
+            const records = data.records;
+
+            // Calculate statistics
+            const stats = calculateStats(records);
+            updateStats(stats);
+
+            // Create charts
+            createCharts(records, data.fields);
+
+            // Update table
+            updateTable(records, data.fields);
+            
+            // Populate month filter
+            populateMonthFilter(records);
+
+            // Show dashboard
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function calculateStats(records) {
+            const stats = {
+                total: records.length,
+                totalValue: 0,
+                avgValue: 0,
+                customers: new Set(),
+                totalVAT19: 0,
+                totalVAT5: 0
+            };
+
+            records.forEach(record => {
+                // Invoice amount from FAKIZNOS field
+                if (record.FAKIZNOS !== undefined && record.FAKIZNOS !== null && record.FAKIZNOS !== '') {
+                    const amount = typeof record.FAKIZNOS === 'number' ? record.FAKIZNOS : parseFloat(String(record.FAKIZNOS).replace(',', '.')) || 0;
+                    stats.totalValue += amount;
+                }
+                
+                // VAT amounts
+                if (record.DDV19) {
+                    stats.totalVAT19 += typeof record.DDV19 === 'number' ? record.DDV19 : parseFloat(String(record.DDV19).replace(',', '.')) || 0;
+                }
+                if (record.DDV5) {
+                    stats.totalVAT5 += typeof record.DDV5 === 'number' ? record.DDV5 : parseFloat(String(record.DDV5).replace(',', '.')) || 0;
+                }
+
+                // Customer tracking
+                if (record.IMEKOM) {
+                    stats.customers.add(record.IMEKOM);
+                }
+            });
+
+            stats.avgValue = stats.total > 0 ? stats.totalValue / stats.total : 0;
+
+            return stats;
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalInvoices').textContent = stats.total.toLocaleString();
+            document.getElementById('totalValue').textContent = stats.totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('avgInvoice').textContent = stats.avgValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            document.getElementById('totalCustomers').textContent = stats.customers.size.toLocaleString();
+        }
+
+        function createCharts(records, fields) {
+            // Destroy existing charts
+            Object.values(charts).forEach(chart => chart.destroy());
+            charts = {};
+
+            // Trend Chart - Invoices by date
+            const trendData = createTrendData(records);
+            charts.trend = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: trendData.labels,
+                    datasets: [{
+                        label: 'Invoices',
+                        data: trendData.data,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Type Distribution Chart - By document type
+            const typeData = createTypeDistribution(records);
+            charts.type = new Chart(document.getElementById('typeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: typeData.labels,
+                    datasets: [{
+                        data: typeData.data,
+                        backgroundColor: [
+                            '#667eea', '#48bb78', '#ed8936', '#4299e1', '#9f7aea',
+                            '#f56565', '#38b2ac', '#ecc94b'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+            
+            // Add type descriptions
+            updateTypeDescription(typeData);
+
+            // Revenue Chart - Monthly revenue
+            const revenueData = createRevenueData(records);
+            charts.revenue = new Chart(document.getElementById('revenueChart'), {
+                type: 'bar',
+                data: {
+                    labels: revenueData.labels,
+                    datasets: [{
+                        label: 'Revenue',
+                        data: revenueData.data,
+                        backgroundColor: '#48bb78'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Top Customers Chart
+            const customerData = createCustomerData(records);
+            charts.customer = new Chart(document.getElementById('customerChart'), {
+                type: 'bar',
+                data: {
+                    labels: customerData.labels,
+                    datasets: [{
+                        label: 'Total Value',
+                        data: customerData.data,
+                        backgroundColor: '#4299e1'
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function createTrendData(records) {
+            const dailyCounts = {};
+            
+            records.forEach(record => {
+                const date = record.DATUM || record.DATE || 'Unknown';
+                if (date && date !== 'Unknown') {
+                    // Convert DD.MM.YYYY to YYYY-MM-DD for sorting
+                    let sortableDate = date;
+                    if (date.includes('.')) {
+                        const parts = date.split('.');
+                        if (parts.length === 3) {
+                            sortableDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        }
+                    }
+                    dailyCounts[sortableDate] = (dailyCounts[sortableDate] || 0) + 1;
+                }
+            });
+
+            const sorted = Object.entries(dailyCounts).sort();
+            return {
+                labels: sorted.map(([date]) => date),
+                data: sorted.map(([, count]) => count)
+            };
+        }
+
+        function createTypeDistribution(records) {
+            const typeCounts = {};
+            
+            records.forEach(record => {
+                const type = record.TIP_DOK || 'Unknown';
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+            });
+
+            return {
+                labels: Object.keys(typeCounts),
+                data: Object.values(typeCounts)
+            };
+        }
+
+        function createRevenueData(records) {
+            const monthlyRevenue = {};
+            
+            // First, collect all data
+            records.forEach(record => {
+                const date = record.DATUM || record.DATE;
+                const amount = typeof record.FAKIZNOS === 'number' ? record.FAKIZNOS : parseFloat(String(record.FAKIZNOS || 0).replace(',', '.')) || 0;
+                
+                if (date && amount) {
+                    let month = date;
+                    if (date.includes('.')) {
+                        const parts = date.split('.');
+                        if (parts.length === 3) {
+                            month = `${parts[2]}-${parts[1]}`;
+                        }
+                    } else if (date.includes('-')) {
+                        month = date.substring(0, 7);
+                    }
+                    monthlyRevenue[month] = (monthlyRevenue[month] || 0) + amount;
+                }
+            });
+
+            // Determine the year from the data
+            const months = Object.keys(monthlyRevenue);
+            let year = '2025';
+            if (months.length > 0) {
+                year = months[0].split('-')[0];
+            }
+
+            // Create all 12 months for the year
+            const allMonths = [];
+            for (let i = 1; i <= 12; i++) {
+                const monthStr = `${year}-${i.toString().padStart(2, '0')}`;
+                allMonths.push(monthStr);
+            }
+
+            // Build the final data with all months (0 for missing months)
+            return {
+                labels: allMonths,
+                data: allMonths.map(month => monthlyRevenue[month] || 0)
+            };
+        }
+
+        function createCustomerData(records) {
+            const customerTotals = {};
+            
+            records.forEach(record => {
+                const customer = record.IMEKOM || 'Unknown';
+                const amount = typeof record.FAKIZNOS === 'number' ? record.FAKIZNOS : parseFloat(String(record.FAKIZNOS || 0).replace(',', '.')) || 0;
+                customerTotals[customer] = (customerTotals[customer] || 0) + amount;
+            });
+
+            const sorted = Object.entries(customerTotals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            return {
+                labels: sorted.map(([customer]) => customer),
+                data: sorted.map(([, value]) => value)
+            };
+        }
+
+        function updateTypeDescription(typeData) {
+            const descriptions = {
+                '1': 'Type 1 - Purchase Invoice',
+                '2': 'Type 2 - Sales Invoice',
+                '3': 'Type 3 - Return Invoice',
+                '4': 'Type 4 - Proforma Invoice',
+                '5': 'Type 5 - Internal Transfer',
+                '6': 'Type 6 - Credit Note',
+                '7': 'Type 7 - Debit Note',
+                '8': 'Type 8 - Advance Payment',
+                '9': 'Type 9 - Other Document'
+            };
+
+            const descDiv = document.getElementById('typeDescription');
+            let html = '<strong>Document Types:</strong><br>';
+            typeData.labels.forEach((type, index) => {
+                const desc = descriptions[type] || `Type ${type} - Document`;
+                const count = typeData.data[index];
+                html += `<div style="margin-top: 5px;"><span style="display: inline-block; width: 12px; height: 12px; background: ${['#667eea', '#48bb78', '#ed8936', '#4299e1', '#9f7aea', '#f56565', '#38b2ac', '#ecc94b'][index % 8]}; border-radius: 2px; margin-right: 8px;"></span>${desc}: <strong>${count}</strong> invoices</div>`;
+            });
+            descDiv.innerHTML = html;
+        }
+
+        function populateMonthFilter(records) {
+            const months = new Set();
+            
+            records.forEach(record => {
+                const date = record.DATUM || record.DATE;
+                if (date) {
+                    let month = date;
+                    if (date.includes('.')) {
+                        const parts = date.split('.');
+                        if (parts.length === 3) {
+                            month = `${parts[2]}-${parts[1]}`;
+                        }
+                    } else if (date.includes('-')) {
+                        month = date.substring(0, 7);
+                    }
+                    months.add(month);
+                }
+            });
+
+            const select = document.getElementById('monthFilter');
+            select.innerHTML = '<option value="all">All Months</option>';
+            
+            Array.from(months).sort().reverse().forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                select.appendChild(option);
+            });
+
+            select.onchange = function() {
+                filterTableByMonth(this.value);
+            };
+        }
+
+        function filterTableByMonth(selectedMonth) {
+            if (!currentData) return;
+            
+            let filteredRecords = currentData.records;
+            
+            if (selectedMonth !== 'all') {
+                filteredRecords = currentData.records.filter(record => {
+                    const date = record.DATUM || record.DATE;
+                    if (!date) return false;
+                    
+                    let month = date;
+                    if (date.includes('.')) {
+                        const parts = date.split('.');
+                        if (parts.length === 3) {
+                            month = `${parts[2]}-${parts[1]}`;
+                        }
+                    } else if (date.includes('-')) {
+                        month = date.substring(0, 7);
+                    }
+                    
+                    return month === selectedMonth;
+                });
+            }
+            
+            updateTableOnly(filteredRecords, currentData.fields);
+        }
+
+        function updateTable(records, fields) {
+            const header = document.getElementById('tableHeader');
+            const body = document.getElementById('tableBody');
+            
+            // Clear existing content
+            header.innerHTML = '';
+            body.innerHTML = '';
+
+            // Key fields to display
+            const keyFields = ['BR_DOK', 'DATUM', 'IMEKOM', 'FAKIZNOS', 'DDV19', 'DDV5', 'PLATENO', 'IMEMAG', 'VALUTA', 'NACINISPOR'];
+            const displayFields = keyFields.filter(f => fields.some(field => field.name === f));
+            
+            // If no key fields found, use first 10
+            const fieldsToShow = displayFields.length > 0 ? displayFields : fields.slice(0, 10).map(f => f.name);
+
+            // Add headers with translations
+            fieldsToShow.forEach(fieldName => {
+                const th = document.createElement('th');
+                th.textContent = fieldTranslations[fieldName] || fieldName;
+                header.appendChild(th);
+            });
+
+            // Add rows (first 100 records)
+            records.slice(0, 100).forEach(record => {
+                const tr = document.createElement('tr');
+                fieldsToShow.forEach(fieldName => {
+                    const td = document.createElement('td');
+                    const value = record[fieldName];
+                    
+                    // Format values
+                    if (value !== null && value !== undefined && value !== '') {
+                        if (typeof value === 'number') {
+                            td.textContent = value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        } else {
+                            td.textContent = value;
+                        }
+                    } else {
+                        td.textContent = '';
+                    }
+                    tr.appendChild(td);
+                });
+                body.appendChild(tr);
+            });
+        }
+
+        function updateTableOnly(records, fields) {
+            const body = document.getElementById('tableBody');
+            body.innerHTML = '';
+
+            // Key fields to display
+            const keyFields = ['BR_DOK', 'DATUM', 'IMEKOM', 'FAKIZNOS', 'DDV19', 'DDV5', 'PLATENO', 'IMEMAG', 'VALUTA', 'NACINISPOR'];
+            const displayFields = keyFields.filter(f => fields.some(field => field.name === f));
+            const fieldsToShow = displayFields.length > 0 ? displayFields : fields.slice(0, 10).map(f => f.name);
+
+            // Add rows
+            records.forEach(record => {
+                const tr = document.createElement('tr');
+                fieldsToShow.forEach(fieldName => {
+                    const td = document.createElement('td');
+                    const value = record[fieldName];
+                    
+                    if (value !== null && value !== undefined && value !== '') {
+                        if (typeof value === 'number') {
+                            td.textContent = value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        } else {
+                            td.textContent = value;
+                        }
+                    } else {
+                        td.textContent = '';
+                    }
+                    tr.appendChild(td);
+                });
+                body.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>

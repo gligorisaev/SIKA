@@ -1,0 +1,31 @@
+# Database files
+*.DBF
+*.NTX
+*.dbf
+*.ntx
+
+# Binary files
+*.EXE
+*.exe
+*.OBJ
+*.obj
+
+# Archive files
+*.ZIP
+*.zip
+
+# Print files
+*.PRN
+*.prn
+
+# Large JSON exports
+*.json
+
+# Random data files
+A*
+B*
+
+# Keep only dashboard and scripts
+!dashboard.html
+!dbf_to_json.py
+!README.md
